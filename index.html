@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CineFlow Ultra - 劇組專業協作系統</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-pink: #d63384;
+            --bg-dark: #000000;
+            --card-grey: #1c1c1e;
+            --border-grey: #2c2c2e;
+            --text-main: #ffffff;
+            --text-dim: #8e8e93;
+            --status-green: #2ecc71;
+            --status-yellow: #f1c40f;
+        }
+
+        body { font-family: -apple-system, sans-serif; background: var(--bg-dark); color: var(--text-main); margin: 0; padding: 0; overflow: hidden; }
+        
+        /* 頁面切換系統 */
+        .page { display: none; height: 100vh; flex-direction: column; overflow: hidden; }
+        .page.active { display: flex; }
+
+        /* 導航與頁籤 */
+        .top-nav { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border-grey); background: rgba(0,0,0,0.9); z-index: 100; }
+        .nav-title { font-size: 1rem; font-weight: 600; letter-spacing: 0.5px; }
+        .tabs { display: flex; border-bottom: 1px solid var(--border-grey); }
+        .tab { flex: 1; text-align: center; padding: 12px; color: var(--text-dim); font-size: 0.85rem; cursor: pointer; }
+        .tab.active { color: var(--primary-pink); border-bottom: 2px solid var(--primary-pink); }
+
+        /* 內容容器 */
+        .scroll-container { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 80px; }
+
+        /* 卡片與清單樣式 */
+        .item-card { background: var(--card-grey); border-radius: 12px; padding: 15px; margin-bottom: 15px; border-left: 4px solid var(--primary-pink); cursor: pointer; }
+        .shot-label { background: #3a3a3c; padding: 2px 10px; border-radius: 20px; font-size: 0.75rem; margin-bottom: 10px; display: inline-block; }
+        
+        /* 器材清單專用樣式 */
+        .gear-category { margin-top: 15px; margin-bottom: 10px; color: var(--primary-pink); font-size: 0.85rem; font-weight: bold; letter-spacing: 1px; }
+        .gear-row { display: flex; justify-content: space-between; align-items: center; background: var(--card-grey); padding: 15px; border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border-grey); }
+        .gear-info { display: flex; align-items: center; gap: 12px; }
+        .gear-info i { width: 20px; color: var(--text-dim); text-align: center; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #444; transition: 0.3s; }
+        .status-dot.connecting { background: var(--status-yellow); animation: blink 0.8s infinite; }
+        .status-dot.connected { background: var(--status-green); box-shadow: 0 0 8px var(--status-green); }
+
+        /* 分鏡佈局 */
+        .shot-grid { display: grid; grid-template-columns: 120px 1fr; gap: 15px; }
+        .img-box { width: 120px; height: 120px; background: #2c2c2e; border: 1px dashed #444; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+        .img-box img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* 佈光畫布 */
+        #lighting-canvas { width: 100vw; height: 100vw; background: #111; position: relative; overflow: hidden; border-bottom: 1px solid var(--border-grey); }
+        .lighting-asset { width: 45px; height: 45px; background: #333; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: grab; }
+        .dropped-node { position: absolute; cursor: move; color: var(--primary-pink); font-size: 1.5rem; touch-action: none; }
+
+        /* 表單與按鈕 */
+        .input-dark { width: 100%; background: #2c2c2e; border: none; border-radius: 6px; padding: 10px; color: white; margin: 5px 0; font-size: 0.85rem; box-sizing: border-box;}
+        .btn-add-floating { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background: var(--primary-pink); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 90; }
+
+        /* 彈窗 */
+        .overlay { position: fixed; bottom: 0; left: 0; width: 100%; background: #1c1c1e; border-top: 1px solid var(--border-grey); padding: 20px; transform: translateY(100%); transition: 0.3s; z-index: 200; box-sizing: border-box;}
+        .overlay.active { transform: translateY(0); }
+
+        @keyframes blink { 50% { opacity: 0.3; } }
+    </style>
+</head>
+<body>
+
+    <div id="page-home" class="page active">
+        <div class="top-nav">
+            <i class="fas fa-bars nav-icon"></i>
+            <span class="nav-title">CINEFLOW PROJECTS</span>
+            <i class="fas fa-cog nav-icon"></i>
+        </div>
+        <div class="tabs">
+            <div class="tab" onclick="switchPage('page-gear')">拍攝器材連線</div>
+            <div class="tab active">Smartphone</div>
+        </div>
+        <div class="scroll-container" id="project-list">
+            <div class="item-card" onclick="openProject('我的首部短片')">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>我的首部短片</strong>
+                    <small style="color:var(--text-dim)">2026-06-16</small>
+                </div>
+                <p style="color:var(--text-dim); font-size:0.8rem; margin-top:5px;">場次：SC-01 | 肖像模式</p>
+            </div>
+        </div>
+        <div class="btn-add-floating" onclick="toggleOverlay('overlay-new-project', true)">＋</div>
+    </div>
+
+    <div id="page-gear" class="page">
+        <div class="top-nav">
+            <i class="fas fa-chevron-left nav-icon" onclick="switchPage('page-home')"></i>
+            <span class="nav-title">拍攝器材現場連線</span>
+            <i class="fas fa-sync nav-icon" onclick="alert('重新掃描現場訊號...')"></i>
+        </div>
+        <div class="scroll-container">
+            <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 15px;">點擊目標設備進行無線連線狀態同步，勾選進行現場清點。</p>
+            
+            <div class="gear-category">DIGITAL CINEMA CAMERA (攝影機)</div>
+            <div class="gear-row" onclick="connectGear('cam-1')">
+                <div class="gear-info"><input type="checkbox" onclick="event.stopPropagation()"> <i class="fas fa-video"></i> <span>Sony FX3</span></div>
+                <div class="status-dot" id="cam-1"></div>
+            </div>
+            <div class="gear-row" onclick="connectGear('cam-2')">
+                <div class="gear-info"><input type="checkbox" onclick="event.stopPropagation()"> <i class="fas fa-video"></i> <span>RED Komodo 6K</span></div>
+                <div class="status-dot" id="cam-2"></div>
+            </div>
+            <div class="gear-row" onclick="connectGear('cam-3')">
+                <div class="gear-info"><input type="checkbox" onclick="event.stopPropagation()"> <i class="fas fa-video"></i> <span>ARRI Alexa Mini</span></div>
+                <div class="status-dot" id="cam-3"></div>
+            </div>
+
+            <div class="gear-category">WIRELESS VIDEO TRANSMITTER (無線圖傳)</div>
+            <div class="gear-row" onclick="connectGear('tx-1')">
+                <div class="gear-info"><input type="checkbox" onclick="event.stopPropagation()"> <i class="fas fa-satellite-dish"></i> <span>DJI Transmission TX</span></div>
+                <div class="status-dot" id="tx-1"></div>
+            </div>
+            <div class="gear-row" onclick="connectGear('tx-2')">
+                <div class="gear-info"><input type="checkbox" onclick="event.stopPropagation()"> <i class="fas fa-satellite-dish"></i> <span>Hollyland Cosmo C1</span></div>
+                <div class="status-dot" id="tx-2"></div>
+            </div>
+
+            <div class="gear-category">GIMBAL & FOLLOW FOCUS (穩定器/跟焦器)</div>
+            <div class="gear-row" onclick="connectGear('gim-1')">
+                <div class="gear-info"><input type="checkbox" onclick="event.stopPropagation()"> <i class="fas fa-gamepad"></i> <span>DJI Ronin RS4 Pro</span></div>
+                <div class="status-dot" id="gim-1"></div>
+            </div>
+            <div class="gear-row" onclick="connectGear('gim-2')">
+                <div class="gear-info"><input type="checkbox" onclick="event.stopPropagation()"> <i class="fas fa-ring"></i> <span>Tilta Nucleus-M</span></div>
+                <div class="status-dot" id="gim-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-storyboard" class="page">
+        <div class="top-nav">
+            <i class="fas fa-chevron-left nav-icon" onclick="switchPage('page-home')"></i>
+            <span class="nav-title" id="active-title">分鏡編輯</span>
+            <div style="display:flex; gap:15px;">
+                <i class="fas fa-lightbulb nav-icon" onclick="switchPage('page-lighting')"></i>
+                <i class="fas fa-play-circle nav-icon" style="color:var(--primary-pink)" onclick="startRecordView()"></i>
+            </div>
+        </div>
+        <div class="scroll-container" id="story-list">
+            </div>
+        <div class="btn-add-floating" onclick="addNewShot()">＋</div>
+    </div>
+
+    <div id="page-lighting" class="page">
+        <div class="top-nav">
+            <i class="fas fa-chevron-left nav-icon" onclick="switchPage('page-storyboard')"></i>
+            <span class="nav-title">佈光紀錄 (TOP VIEW)</span>
+            <span onclick="switchPage('page-storyboard')" style="color:var(--primary-pink)">保存</span>
+        </div>
+        <div style="display:flex; gap:15px; padding:10px; background:#222; overflow-x:auto;">
+            <div class="lighting-asset" draggable="true" ondragstart="evDrag(event, 'camera')"><i class="fas fa-camera"></i></div>
+            <div class="lighting-asset" draggable="true" ondragstart="evDrag(event, 'user')"><i class="fas fa-user"></i></div>
+            <div class="lighting-asset" draggable="true" ondragstart="evDrag(event, 'key')"><i class="fas fa-lightbulb" style="color:yellow"></i></div>
+            <div class="lighting-asset" draggable="true" ondragstart="evDrag(event, 'reflector')"><i class="fas fa-vector-square"></i></div>
+        </div>
+        <div id="lighting-canvas" ondrop="evDrop(event)" ondragover="evAllow(event)"></div>
+    </div>
+
+    <div id="page-record" class="page">
+        <div class="top-nav">
+            <i class="fas fa-times nav-icon" onclick="switchPage('page-storyboard')"></i>
+            <span class="nav-title">現場拍攝錄製</span>
+            <span onclick="exportCSV()" style="color:#2ecc71">導出 CSV</span>
+        </div>
+        <div class="scroll-container" id="record-container"></div>
+    </div>
+
+    <div id="overlay-new-project" class="overlay">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+            <span onclick="toggleOverlay('overlay-new-project', false)">取消</span>
+            <strong>新專案</strong>
+            <span style="color:var(--primary-pink)" onclick="confirmNewProject()">確定</span>
+        </div>
+        <input type="text" id="in-proj-name" class="input-dark" placeholder="輸入專案名稱">
+        <input type="date" id="in-proj-date" class="input-dark">
+    </div>
+
+    <div id="overlay-light-detail" class="overlay">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+            <strong>燈具參數設定</strong>
+            <span style="color:var(--primary-pink)" onclick="toggleOverlay('overlay-light-detail', false)">完成</span>
+        </div>
+        <label>色溫 (K): <span id="k-show">5600</span>K</label>
+        <input type="range" min="2500" max="8000" value="5600" class="input-dark" oninput="document.getElementById('k-show').innerText=this.value">
+        <label>亮度 (%): <span id="p-show">100</span>%</label>
+        <input type="range" min="0" max="100" value="100" class="input-dark" oninput="document.getElementById('p-show').innerText=this.value">
+    </div>
+
+    <input type="file" id="global-file" accept="image/*" capture="camera" style="display:none" onchange="handleFile(event)">
+
+    <script>
+        let shotCount = 0;
+        let currentShotId = '';
+
+        function switchPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+        }
+
+        function toggleOverlay(id, show) {
+            document.getElementById(id).classList.toggle('active', show);
+        }
+
+        // 模擬藍牙/Wi-Fi器材連線動態邏輯
+        function connectGear(id) {
+            const dot = document.getElementById(id);
+            if (dot.classList.contains('connected')) {
+                dot.className = 'status-dot'; // 斷開連線
+                return;
+            }
+            dot.className = 'status-dot connecting'; // 進入連線中狀態
+            setTimeout(() => {
+                dot.className = 'status-dot connected'; // 2秒後成功連線
+            }, 2000);
+        }
+
+        function confirmNewProject() {
+            const name = document.getElementById('in-proj-name').value || "未命名專案";
+            openProject(name);
+            toggleOverlay('overlay-new-project', false);
+        }
+
+        function openProject(name) {
+            document.getElementById('active-title').innerText = name;
+            document.getElementById('story-list').innerHTML = '';
+            shotCount = 0;
+            addNewShot();
+            switchPage('page-storyboard');
+        }
+
+        function addNewShot() {
+            shotCount++;
+            const id = `1-${shotCount}`;
+            const div = document.createElement('div');
+            div.className = 'item-card';
+            div.innerHTML = `
+                <div class="shot-label">${id}</div>
+                <div class="shot-grid">
+                    <div class="img-box" onclick="triggerCam('${id}')">
+                        <i class="fas fa-camera" id="icon-${id}"></i>
+                        <img id="img-${id}" style="display:none">
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-dim);">
+                        <div>⏱ --:-- / --:--</div>
+                        <textarea class="input-dark" id="note-${id}" placeholder="輸入分鏡說明..." style="height:50px;"></textarea>
+                    </div>
+                </div>
+            `;
+            document.getElementById('story-list').appendChild(div);
+            div.scrollIntoView({behavior:'smooth'});
+        }
+
+        function triggerCam(id) { currentShotId = id; document.getElementById('global-file').click(); }
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    document.getElementById(`img-${currentShotId}`).src = ev.target.result;
+                    document.getElementById(`img-${currentShotId}`).style.display = 'block';
+                    document.getElementById(`icon-${currentShotId}`).style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function evAllow(ev) { ev.preventDefault(); }
+        function evDrag(ev, type) { ev.dataTransfer.setData("type", type); }
+        function evDrop(ev) {
+            ev.preventDefault();
+            const type = ev.dataTransfer.getData("type");
+            const canvas = document.getElementById('lighting-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const x = ev.clientX - rect.left - 20;
+            const y = ev.clientY - rect.top - 20;
+
+            const node = document.createElement('div');
+            node.className = 'dropped-node';
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            node.innerHTML = `<i class="fas ${type==='camera'?'fa-camera':type==='user'?'fa-user':type==='key'?'fa-lightbulb':'fa-vector-square'}"></i>`;
+            node.onclick = () => toggleOverlay('overlay-light-detail', true);
+            canvas.appendChild(node);
+        }
+
+        function startRecordView() {
+            const container = document.getElementById('record-container');
+            container.innerHTML = '';
+            document.querySelectorAll('#story-list .item-card').forEach(s => {
+                const label = s.querySelector('.shot-label').innerText;
+                const note = s.querySelector('textarea').value;
+                const imgSrc = s.querySelector('img').src;
+
+                const rec = document.createElement('div');
+                rec.className = 'item-card';
+                rec.innerHTML = `
+                    <div style="display:flex; gap:15px;">
+                        <img src="${imgSrc}" style="width:60px; height:60px; border-radius:4px; display:${imgSrc.includes('data')?'block':'none'}">
+                        <div style="flex:1">
+                            <strong>鏡頭 ${label}</strong>
+                            <p style="font-size:0.8rem; color:var(--text-dim); margin:5px 0;">${note || '無分鏡備註'}</p>
+                            <div style="display:flex; gap:10px; margin-top:10px;">
+                                <button onclick="mark(this, 'OK')" style="flex:1; background:#333; color:white; border:none; padding:8px; border-radius:4px;">OK</button>
+                                <button onclick="mark(this, 'NG')" style="flex:1; background:#333; color:white; border:none; padding:8px; border-radius:4px;">NG</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(rec);
+            });
+            switchPage('page-record');
+        }
+
+        function mark(btn, status) {
+            btn.parentElement.querySelectorAll('button').forEach(b => b.style.background = "#333");
+            btn.style.background = status === 'OK' ? '#d63384' : '#555';
+        }
+
+        function exportCSV() {
+            let csv = "鏡頭編號,狀態,分鏡說明\n";
+            document.querySelectorAll('#record-container .item-card').forEach(r => {
+                const label = r.querySelector('strong').innerText;
+                const isOK = r.querySelector('button[style*="rgb(214, 51, 132)"]') ? "OK" : "NG";
+                csv += `${label},${isOK},現場同步匯出\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '拍攝紀錄日報.csv';
+            a.click();
+        }
+    </script>
+</body>
+</html>
